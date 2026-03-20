@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /Users/StephanieLeung_1 -maxdepth 6 -name \"*.xcodeproj\" -o -name \"*.xcworkspace\" 2>/dev/null | grep -v \"\\\\.xcodeproj/project\\\\.xcworkspace\" | grep -v \"/Library/\")",
+      "Bash(find /Users/StephanieLeung_1/Library/Developer/Xcode/DerivedData/Cosmos-bohjokqxohlcgsajurcraqadfrzh/Build -name \"*.swiftmodule\" 2>/dev/null | head -5\nfind /Users/StephanieLeung_1/Library/Developer/Xcode/DerivedData/Cosmos-bohjokqxohlcgsajurcraqadfrzh/Logs -name \"*.xcactivitylog\" 2>/dev/null | sort -t_ | tail -3)",
+      "Bash(find /Users/StephanieLeung_1/Library/Developer/Xcode/DerivedData/Cosmos-bohjokqxohlcgsajurcraqadfrzh/Build/Intermediates.noindex/Cosmos.build -name \"*.d\" 2>/dev/null | head -5 | xargs grep \"MyShelfView\\\\|AuthView\\\\|ShelfItem\" 2>/dev/null | head -10)",
+      "Bash(find /Users/StephanieLeung_1/Library/Developer/Xcode/DerivedData/Cosmos-bohjokqxohlcgsajurcraqadfrzh/Build/Intermediates.noindex/Cosmos.build -name \"*.o\" 2>/dev/null | head -20)"
+    ]
+  }
+}
