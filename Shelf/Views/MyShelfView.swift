@@ -20,32 +20,31 @@ struct MyShelfView: View {
     private let dotYellow = Color(red: 232/255, green: 200/255, blue: 74/255)
     private let slotBg    = Color(red: 237/255, green: 231/255, blue: 223/255)
 
-    // MARK: Layout constants
-    // shelf.png is 352×82 logical pt (1x asset).
-    // Uniform 16pt gap between every pair of shelves — nothing else touches this.
-    private let shelvesPadding: CGFloat  = 200   // safe-area top → shelf 1 top
-    private let itemRowHeight: CGFloat   = 90
+    // MARK: Fixed asset constants (shelf.png dimensions — do not scale)
     private let shelfImageHeight: CGFloat = 82
-    private let shelfOverlap: CGFloat    = 50    // VStack(spacing: -shelfOverlap)
-    private let interShelfGap: CGFloat   = 16    // uniform gap — same between ALL shelves
+    private let shelfOverlap: CGFloat     = 50
+    private let interShelfGap: CGFloat    = 16
 
-    private var shelfTotalHeight: CGFloat { itemRowHeight + shelfImageHeight - shelfOverlap } // 122
+    // MARK: Proportional layout helpers (calibrated for iPhone 17 Pro, 852pt logical height)
+    // Pass geo.size.height so every device scales automatically.
+    private func shelvesPadding(h: CGFloat) -> CGFloat { h * 0.235 }  // ≈ 200pt @ 852
+    private func itemRowHeight(h: CGFloat) -> CGFloat  { h * 0.106 }  // ≈  90pt @ 852
 
-    // Cat bottom sits on the shelf-3 plank surface.
-    // Layout (all from safe-area top):
-    //   shelvesPadding | shelf1 | gap | shelf2 | gap | itemRow3  ← plank
-    private var shelf3PlankY: CGFloat {
-        shelvesPadding
-            + shelfTotalHeight + interShelfGap   // shelf 1 + gap
-            + shelfTotalHeight + interShelfGap   // shelf 2 + gap
-            + itemRowHeight                       // shelf 3 items row → plank surface
+    private func shelfTotalHeight(h: CGFloat) -> CGFloat {
+        itemRowHeight(h: h) + shelfImageHeight - shelfOverlap
     }
-    private var catTopY: CGFloat { shelf3PlankY - 256 }
+    private func shelf3PlankY(h: CGFloat) -> CGFloat {
+        shelvesPadding(h: h)
+            + shelfTotalHeight(h: h) + interShelfGap   // shelf 1 + gap
+            + shelfTotalHeight(h: h) + interShelfGap   // shelf 2 + gap
+            + itemRowHeight(h: h)                        // shelf 3 items → plank surface
+    }
+    // +100pt compensates for transparent padding at the bottom of the cat sprite
+    private func catTopY(h: CGFloat) -> CGFloat { shelf3PlankY(h: h) - 256 + 100 }
 
-    // Create-new button floats between shelf 1 and shelf 2 as a ZStack overlay.
-    // Its vertical centre sits at the mid-point of that 16pt gap.
-    private var shelf1BottomY: CGFloat { shelvesPadding + shelfTotalHeight }
-    private var createNewCentreY: CGFloat { shelf1BottomY + interShelfGap / 2 }
+    private func shelf1BottomY(h: CGFloat) -> CGFloat { shelvesPadding(h: h) + shelfTotalHeight(h: h) }
+    // Button sits visually between shelf 1 and shelf 2
+    private func createNewTopY(h: CGFloat) -> CGFloat  { shelf1BottomY(h: h) + 8 }
 
     // MARK: Computed
     private var actives: [Experiment] { store.activeExperiments }
@@ -65,6 +64,7 @@ struct MyShelfView: View {
     // MARK: Body
     var body: some View {
         GeometryReader { geo in
+            let h = geo.size.height
             ZStack(alignment: .top) {
                 bg.ignoresSafeArea()
 
@@ -80,21 +80,20 @@ struct MyShelfView: View {
                         shelfView(slotRange: 3..<6, geo: geo)
                         shelfView(slotRange: 6..<8, geo: geo)
                     }
-                    // Bottom nav directly below shelf 3
                     bottomNav
                         .padding(.horizontal, 24)
                         .padding(.top, 16)
                 }
-                .padding(.top, shelvesPadding)
+                .padding(.top, shelvesPadding(h: h))
 
                 // ── Create-new overlay — does NOT affect shelf spacing ──────
-                // Floats visually between shelf 1 and shelf 2.
                 if actives.count < 8 {
                     Button { showNewExperiment = true } label: {
-                        VStack(spacing: 4) {
+                        VStack(spacing: 0) {
                             Text("+")
-                                .font(.system(size: 78, weight: .regular))
+                                .font(.system(size: 64, weight: .regular, design: .rounded))
                                 .foregroundColor(inkMuted)
+                                .padding(.bottom, -18) // collapse dead space below glyph
                             Text("create new")
                                 .font(.custom("BalooBhai2-Regular", size: 12))
                                 .foregroundColor(inkMuted)
@@ -102,15 +101,14 @@ struct MyShelfView: View {
                         .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
-                    // Offset so the button's top edge starts at createNewCentreY
-                    .offset(y: createNewCentreY)
+                    .offset(y: createNewTopY(h: h))
                 }
 
                 // ── Cat — absolutely positioned, bottom on shelf-3 plank ───
                 Image(catImages[catSequence[catFrameIdx]])
                     .resizable()
                     .frame(width: 256, height: 256)
-                    .offset(y: catTopY)
+                    .offset(y: catTopY(h: h))
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .allowsHitTesting(false)
             }
@@ -162,13 +160,17 @@ struct MyShelfView: View {
 
     // MARK: - Shelf
     func shelfView(slotRange: Range<Int>, geo: GeometryProxy) -> some View {
+        let h         = geo.size.height
+        let irh       = itemRowHeight(h: h)
         let slotCount = slotRange.count
         let slotWidth = (geo.size.width - 40) / CGFloat(slotCount)
 
         return VStack(spacing: -shelfOverlap) {
-            HStack(alignment: .bottom, spacing: 0) {
+            HStack(alignment: .top, spacing: 0) {
                 ForEach(slotRange, id: \.self) { absIdx in
-                    ZStack(alignment: .bottom) {
+                    // Top-aligned: label sits at the top of the slot (above the plank),
+                    // icon hangs below and its bottom tucks under the shelf image.
+                    ZStack(alignment: .top) {
                         if let exp = expAt(absIdx) {
                             expItem(exp: exp)
                                 .onTapGesture { selectedExperiment = exp }
@@ -177,7 +179,7 @@ struct MyShelfView: View {
                     .frame(width: slotWidth)
                 }
             }
-            .frame(height: itemRowHeight)
+            .frame(height: irh)
 
             Image("shelf")
                 .resizable()
@@ -188,15 +190,12 @@ struct MyShelfView: View {
 
     // MARK: - Experiment item
     func expItem(exp: Experiment) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 2) {
             HStack(spacing: 4) {
                 Circle()
                     .fill(stateColor(exp))
                     .frame(width: 6, height: 6)
-                Text(exp.name)
-                    .font(.custom("BalooBhai2-Regular", size: 12))
-                    .foregroundColor(inkMid)
-                    .lineLimit(1)
+                TightLineLabel(text: exp.name)
             }
             Group {
                 if exp.hasCustomImage, let img = store.loadCustomImage(for: exp.id) {
@@ -253,6 +252,42 @@ struct MyShelfView: View {
         case .abandoned:          return inkMuted
         case .completed:          return dotGreen
         }
+    }
+}
+
+// MARK: - TightLineLabel
+// SwiftUI lineSpacing() can only add space, not reduce below the font's natural line height.
+// This UIViewRepresentable uses NSParagraphStyle.lineHeightMultiple to actually compress lines.
+import UIKit
+struct TightLineLabel: UIViewRepresentable {
+    let text: String
+    private static let font     = UIFont(name: "BalooBhai2-Regular", size: 12) ?? .systemFont(ofSize: 12)
+    private static let color    = UIColor(red: 114/255, green: 106/255, blue: 100/255, alpha: 1)
+
+    func makeUIView(context: Context) -> UILabel {
+        let label = UILabel()
+        label.numberOfLines = 2
+        label.textAlignment = .center
+        label.lineBreakMode = .byWordWrapping
+        apply(to: label)
+        return label
+    }
+    func updateUIView(_ label: UILabel, context: Context) { apply(to: label) }
+
+    private func apply(to label: UILabel) {
+        let style = NSMutableParagraphStyle()
+        style.lineHeightMultiple = 0.82
+        style.alignment = .center
+        label.attributedText = NSAttributedString(string: text, attributes: [
+            .paragraphStyle: style,
+            .font: Self.font,
+            .foregroundColor: Self.color
+        ])
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+        let w = proposal.width ?? uiView.intrinsicContentSize.width
+        return uiView.sizeThatFits(CGSize(width: w, height: .greatestFiniteMagnitude))
     }
 }
 
