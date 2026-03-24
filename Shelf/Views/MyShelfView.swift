@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import UIKit
 
 struct MyShelfView: View {
     @EnvironmentObject var store: SupabaseExperimentStore
@@ -260,7 +261,6 @@ struct MyShelfView: View {
 // MARK: - TightLineLabel
 // SwiftUI lineSpacing() can only add space, not reduce below the font's natural line height.
 // This UIViewRepresentable uses NSParagraphStyle.lineHeightMultiple to actually compress lines.
-import UIKit
 struct TightLineLabel: UIViewRepresentable {
     let text: String
     private static let font     = UIFont(name: "BalooBhai2-Regular", size: 12) ?? .systemFont(ofSize: 12)
