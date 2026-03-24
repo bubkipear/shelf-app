@@ -93,11 +93,11 @@ struct MyShelfView: View {
                         VStack(spacing: 0) {
                             Text("+")
                                 .font(.system(size: 64, weight: .regular, design: .rounded))
-                                .foregroundColor(inkMuted)
+                                .foregroundColor(inkMid)
                                 .padding(.bottom, -18) // collapse dead space below glyph
                             Text("create new")
                                 .font(.custom("BalooBhai2-Regular", size: 12))
-                                .foregroundColor(inkMuted)
+                                .foregroundColor(inkMid)
                         }
                         .frame(maxWidth: .infinity)
                     }
@@ -149,12 +149,12 @@ struct MyShelfView: View {
             }
             VStack(spacing: 2) {
                 Text("MY EXPERIMENTS")
-                    .font(.custom("BalooBhai2-Regular", size: 20))
-                    .tracking(2.5)
+                    .font(.custom("BalooBhai2-Regular", size: 24))
+                    .tracking(24 * 0.14)
                     .foregroundColor(inkMid)
                 Text("— Day \(dayCount) of growing —")
                     .font(.custom("BalooBhai2-Regular", size: 12))
-                    .foregroundColor(inkMuted)
+                    .foregroundColor(inkMid)
             }
         }
     }
@@ -167,13 +167,14 @@ struct MyShelfView: View {
         let slotWidth = (geo.size.width - 40) / CGFloat(slotCount)
 
         return VStack(spacing: -shelfOverlap) {
-            HStack(alignment: .top, spacing: 0) {
+            HStack(alignment: .bottom, spacing: 0) {
                 ForEach(slotRange, id: \.self) { absIdx in
-                    // Top-aligned: label sits at the top of the slot (above the plank),
-                    // icon hangs below and its bottom tucks under the shelf image.
-                    ZStack(alignment: .top) {
+                    // Bottom-aligned: image bottom sits on the shelf plank,
+                    // label floats above the image.
+                    ZStack(alignment: .bottom) {
                         if let exp = expAt(absIdx) {
-                            expItem(exp: exp)
+                            expItem(exp: exp, slotWidth: slotWidth)
+                                .padding(.bottom, shelfOverlap)
                                 .onTapGesture { selectedExperiment = exp }
                         }
                     }
@@ -181,6 +182,7 @@ struct MyShelfView: View {
                 }
             }
             .frame(height: irh)
+            .zIndex(1)
 
             Image("shelf")
                 .resizable()
@@ -190,8 +192,18 @@ struct MyShelfView: View {
     }
 
     // MARK: - Experiment item
-    func expItem(exp: Experiment) -> some View {
-        VStack(spacing: 2) {
+    func expItem(exp: Experiment, slotWidth: CGFloat) -> some View {
+        // Pre-compute frame in regular Swift (not inside @ViewBuilder)
+        let imgFrame: CGSize = {
+            if exp.hasCustomImage, let img = store.loadCustomImage(for: exp.id) {
+                return aspectFitFrame(imageSize: img.size, slotWidth: slotWidth)
+            } else if let name = exp.iconPreset.stickerImageName, let img = UIImage(named: name) {
+                return aspectFitFrame(imageSize: img.size, slotWidth: slotWidth)
+            }
+            return CGSize(width: 54, height: 72)
+        }()
+
+        return VStack(spacing: 2) {
             HStack(spacing: 4) {
                 Circle()
                     .fill(stateColor(exp))
@@ -200,9 +212,15 @@ struct MyShelfView: View {
             }
             Group {
                 if exp.hasCustomImage, let img = store.loadCustomImage(for: exp.id) {
-                    Image(uiImage: img).resizable().scaledToFit()
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: imgFrame.width, height: imgFrame.height)
                 } else if let sticker = exp.iconPreset.stickerImageName {
-                    Image(sticker).resizable().scaledToFit()
+                    Image(sticker)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: imgFrame.width, height: imgFrame.height)
                 } else {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10)
@@ -214,8 +232,6 @@ struct MyShelfView: View {
                     }
                 }
             }
-            .frame(maxHeight: 80)
-            .rotationEffect(.degrees(exp.tiltDegrees))
             .shadow(color: .black.opacity(0.10), radius: 5, x: 0, y: 4)
         }
     }
@@ -248,6 +264,20 @@ struct MyShelfView: View {
     }
 
     // MARK: - Helpers
+
+    /// Anchors to slot width, preserves aspect ratio, caps height at maxHeight.
+    private func aspectFitFrame(imageSize: CGSize, slotWidth: CGFloat) -> CGSize {
+        let maxH: CGFloat = 110
+        let targetW = slotWidth * 0.9
+        let aspect = imageSize.width / imageSize.height
+        let naturalH = targetW / aspect
+        if naturalH <= maxH {
+            return CGSize(width: targetW, height: naturalH)
+        } else {
+            return CGSize(width: maxH * aspect, height: maxH)
+        }
+    }
+
     func stateColor(_ exp: Experiment) -> Color {
         switch exp.experimentState {
         case .tended:             return dotGreen
