@@ -39,6 +39,16 @@ enum ExperimentIcon: String, Codable, CaseIterable {
     case run         = "figure.run"
     case cook        = "fork.knife"
 
+    // Bundled photorealistic sticker, if one exists for this icon type
+    var stickerImageName: String? {
+        switch self {
+        case .mug:  return "coffee"
+        case .cook: return "cook"
+        case .book: return "pages"
+        default:    return nil
+        }
+    }
+
     var label: String {
         switch self {
         case .book:       return "Book"

@@ -200,6 +200,8 @@ struct MyShelfView: View {
             Group {
                 if exp.hasCustomImage, let img = store.loadCustomImage(for: exp.id) {
                     Image(uiImage: img).resizable().scaledToFit()
+                } else if let sticker = exp.iconPreset.stickerImageName {
+                    Image(sticker).resizable().scaledToFit()
                 } else {
                     ZStack {
                         RoundedRectangle(cornerRadius: 10)
