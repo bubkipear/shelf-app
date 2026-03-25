@@ -204,12 +204,7 @@ struct MyShelfView: View {
         }()
 
         return VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(stateColor(exp))
-                    .frame(width: 6, height: 6)
-                TightLineLabel(text: exp.name)
-            }
+            TightLineLabel(text: exp.name, dotColor: UIColor(stateColor(exp)))
             Group {
                 if exp.hasCustomImage, let img = store.loadCustomImage(for: exp.id) {
                     Image(uiImage: img)
@@ -293,6 +288,7 @@ struct MyShelfView: View {
 // This UIViewRepresentable uses NSParagraphStyle.lineHeightMultiple to actually compress lines.
 struct TightLineLabel: UIViewRepresentable {
     let text: String
+    var dotColor: UIColor? = nil
     private static let font     = UIFont(name: "BalooBhai2-Regular", size: 12) ?? .systemFont(ofSize: 12)
     private static let color    = UIColor(red: 114/255, green: 106/255, blue: 100/255, alpha: 1)
 
@@ -310,11 +306,30 @@ struct TightLineLabel: UIViewRepresentable {
         let style = NSMutableParagraphStyle()
         style.lineHeightMultiple = 0.82
         style.alignment = .center
-        label.attributedText = NSAttributedString(string: text, attributes: [
+        let attributed = NSMutableAttributedString(string: text, attributes: [
             .paragraphStyle: style,
             .font: Self.font,
             .foregroundColor: Self.color
         ])
+        if let dotColor {
+            // Render a 6×6 circle and attach it inline after the last word
+            let dotSize = CGSize(width: 6, height: 6)
+            let renderer = UIGraphicsImageRenderer(size: dotSize)
+            let dotImage = renderer.image { ctx in
+                dotColor.setFill()
+                ctx.cgContext.fillEllipse(in: CGRect(origin: .zero, size: dotSize))
+            }
+            let attachment = NSTextAttachment()
+            attachment.image = dotImage
+            // Vertically centre the dot on the font's cap-height
+            let capHeight = Self.font.capHeight
+            attachment.bounds = CGRect(x: 0, y: (capHeight - dotSize.height) / 2,
+                                       width: dotSize.width, height: dotSize.height)
+            let prefix = NSMutableAttributedString(attachment: attachment)
+            prefix.append(NSAttributedString(string: " "))
+            attributed.insert(prefix, at: 0)
+        }
+        label.attributedText = attributed
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
