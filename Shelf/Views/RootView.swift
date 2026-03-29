@@ -5,11 +5,11 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            AbandonedView()
+            AbandonedView(selectedTab: $selectedTab)
                 .tag(0)
             MyShelfView(selectedTab: $selectedTab)
                 .tag(1)
-            CompletedView()
+            CompletedView(selectedTab: $selectedTab)
                 .tag(2)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
