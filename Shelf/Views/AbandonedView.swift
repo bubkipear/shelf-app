@@ -13,6 +13,7 @@ struct AbandonedView: View {
     private let inkMuted  = Color(red: 154/255, green: 145/255, blue: 136/255)
     private let dotGreen  = Color(red: 123/255, green: 198/255, blue: 122/255)
     private let dotYellow = Color(red: 232/255, green: 200/255, blue: 74/255)
+    private let dotRed    = Color(red: 220/255, green: 100/255, blue: 90/255)
     private let slotBg    = Color(red: 237/255, green: 231/255, blue: 223/255)
 
     // MARK: Fixed asset constants
@@ -196,10 +197,11 @@ struct AbandonedView: View {
 
     func stateColor(_ exp: Experiment) -> Color {
         switch exp.experimentState {
-        case .tended:             return dotGreen
-        case .neglected, .adrift: return dotYellow
-        case .abandoned:          return inkMuted
-        case .completed:          return dotGreen
+        case .onTrack:   return dotGreen
+        case .missed:    return dotYellow
+        case .offTrack:  return dotRed
+        case .abandoned: return inkMuted
+        case .completed: return dotGreen
         }
     }
 }

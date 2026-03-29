@@ -10,12 +10,12 @@ struct ExperimentDetailView: View {
     @State private var showReflectionPrompt = false
     @State private var reflection: String = ""
     @State private var pendingStatus: ExperimentStatus?
-    @State private var checkedInThisSession = false
     @State private var bumpScale: CGFloat = 1.0
 
-    private let cream    = Color(red: 0.98, green: 0.96, blue: 0.93)
-    private let graphite = Color(red: 0.25, green: 0.23, blue: 0.22)
+    private let cream     = Color(red: 0.98, green: 0.96, blue: 0.93)
+    private let graphite  = Color(red: 0.25, green: 0.23, blue: 0.22)
     private let shelfLine = Color(red: 0.72, green: 0.68, blue: 0.63)
+    private let dotGreen  = Color(red: 123/255, green: 198/255, blue: 122/255)
 
     private var live: Experiment {
         store.myExperiments.first(where: { $0.id == experiment.id }) ?? experiment
@@ -135,57 +135,237 @@ struct ExperimentDetailView: View {
 
     private var stateColor: Color {
         switch live.experimentState {
-        case .tended:    return .green.opacity(0.8)
-        case .neglected: return .orange.opacity(0.8)
-        case .adrift:    return graphite.opacity(0.3)
-        case .abandoned: return graphite.opacity(0.2)
-        case .completed: return .blue.opacity(0.6)
+        case .onTrack:   return Color(red: 123/255, green: 198/255, blue: 122/255)
+        case .missed:    return Color(red: 232/255, green: 200/255, blue: 74/255)
+        case .offTrack:  return Color(red: 220/255, green: 100/255, blue: 90/255)
+        case .abandoned: return graphite.opacity(0.3)
+        case .completed: return Color(red: 123/255, green: 198/255, blue: 122/255)
         }
     }
 
     private var stateText: String {
         switch live.experimentState {
-        case .tended:    return "tended"
-        case .neglected: return "needs attention"
-        case .adrift:    return "adrift"
+        case .onTrack:   return "on track"
+        case .missed:    return "missed"
+        case .offTrack:  return "off track"
         case .abandoned: return "abandoned"
         case .completed: return "complete"
         }
     }
 
+    // MARK: - Check-in section (dynamic by type)
+
     private var checkInSection: some View {
-        VStack(spacing: 0) {
-            if checkedInThisSession {
-                HStack(spacing: 10) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.green.opacity(0.7))
-                    Text("Checked in")
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
-                        .foregroundStyle(graphite.opacity(0.5))
-                }
-                .transition(.scale.combined(with: .opacity))
+        Group {
+            if live.experimentType == .target {
+                targetCheckInSection
             } else {
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-                        checkedInThisSession = true
-                        bumpScale = 1.08
-                    }
-                    store.checkIn(experimentId: live.id, note: nil)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bumpScale = 1.0 }
-                } label: {
-                    Text("Mark today ✓")
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
-                        .foregroundStyle(cream)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(graphite)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-                .padding(.horizontal, 20)
-                .transition(.opacity)
+                habitCheckInSection
             }
         }
+    }
+
+    private var habitCheckInSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("THIS WEEK")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .tracking(1.5).foregroundStyle(graphite.opacity(0.35))
+                Spacer()
+                if live.frequency == .severalTimesWeek {
+                    let target = live.timesPerWeek ?? 3
+                    Text("\(checkInsThisWeek.count)/\(target)")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(graphite.opacity(0.35))
+                }
+            }
+            .padding(.horizontal, 20)
+
+            if live.frequency == .daily || live.frequency == nil {
+                // 7 day boxes Mon–Sun: past + today are tappable (toggle); future days are locked
+                HStack(spacing: 6) {
+                    ForEach(0..<7, id: \.self) { dayIndex in
+                        let isDone   = isCheckedInDay(dayIndex)
+                        let isToday  = dayIndex == currentDayIndex
+                        let isFuture = dayIndex > currentDayIndex
+                        let day      = dateForDay(dayIndex)
+                        VStack(spacing: 4) {
+                            Button {
+                                if isDone {
+                                    store.removeCheckIn(experimentId: live.id, on: day)
+                                } else {
+                                    doCheckIn(on: day)
+                                }
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(isDone ? dotGreen : (isToday ? graphite.opacity(0.07) : graphite.opacity(0.03)))
+                                        .frame(width: 34, height: 34)
+                                        .overlay(Circle().stroke(!isDone && !isFuture ? graphite.opacity(0.2) : Color.clear, lineWidth: 1))
+                                    if isDone {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isFuture || live.status != .active)
+                            Text(dayLabel(dayIndex))
+                                .font(.system(size: 9, design: .rounded))
+                                .foregroundStyle(isToday ? graphite.opacity(0.5) : graphite.opacity(0.2))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+
+            } else if live.frequency == .severalTimesWeek {
+                let target = live.timesPerWeek ?? 3
+                let done = checkInsThisWeek.count
+                HStack(spacing: 10) {
+                    ForEach(0..<target, id: \.self) { i in
+                        let isDone = i < done
+                        let isNext = i == done
+                        Button { if isNext { doCheckIn() } } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(isDone ? dotGreen : (isNext ? graphite.opacity(0.07) : graphite.opacity(0.03)))
+                                    .frame(width: 44, height: 44)
+                                    .overlay(Circle().stroke(isNext ? graphite.opacity(0.25) : Color.clear, lineWidth: 1))
+                                if isDone {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                                } else if isNext {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 13, weight: .light)).foregroundStyle(graphite.opacity(0.35))
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDone || !isNext)
+                    }
+                }
+                .padding(.horizontal, 20)
+
+            } else {
+                // Weekly: one box — tap to check in this week, tap again to uncheck
+                let isDone = !checkInsThisWeek.isEmpty
+                Button {
+                    if isDone {
+                        store.removeCheckIn(experimentId: live.id, on: checkInsThisWeek[0].date)
+                    } else {
+                        doCheckIn()
+                    }
+                } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isDone ? dotGreen : graphite.opacity(0.05))
+                            .frame(height: 50)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isDone ? Color.clear : graphite.opacity(0.18), lineWidth: 1))
+                        HStack(spacing: 8) {
+                            if isDone {
+                                Image(systemName: "checkmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                                Text("Done this week").font(.system(size: 14, weight: .medium, design: .rounded)).foregroundStyle(.white)
+                            } else {
+                                Text("Mark done this week").font(.system(size: 14, design: .rounded)).foregroundStyle(graphite.opacity(0.4))
+                            }
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(live.status != .active)
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    private var targetCheckInSection: some View {
+        let target = live.targetCount ?? 1
+        let completions = live.checkIns.filter { $0.didComplete }.sorted(by: { $0.date < $1.date })
+        let done = completions.count
+
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("\(done) of \(target) done")
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(graphite.opacity(0.4))
+                .tracking(0.5)
+                .padding(.horizontal, 20)
+
+            LazyVGrid(
+                columns: Array(repeating: .init(.flexible()), count: min(target, 5)),
+                spacing: 14
+            ) {
+                ForEach(0..<target, id: \.self) { i in
+                    let isDone = i < done
+                    let isNext = i == done && live.status == .active
+                    Button { if isNext { doCheckIn() } } label: {
+                        VStack(spacing: 5) {
+                            ZStack {
+                                Circle()
+                                    .fill(isDone ? dotGreen : (isNext ? graphite.opacity(0.07) : graphite.opacity(0.03)))
+                                    .frame(width: 46, height: 46)
+                                    .overlay(Circle().stroke(isNext ? graphite.opacity(0.25) : Color.clear, lineWidth: 1))
+                                if isDone {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+                                } else if isNext {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 14, weight: .light)).foregroundStyle(graphite.opacity(0.35))
+                                }
+                            }
+                            if isDone {
+                                Text(completions[i].date.formatted(.dateTime.month(.abbreviated).day()))
+                                    .font(.system(size: 9, design: .rounded)).foregroundStyle(graphite.opacity(0.3))
+                            } else {
+                                Text("\(i + 1)").font(.system(size: 9, design: .rounded)).foregroundStyle(graphite.opacity(0.2))
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!isNext)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - Check-in helpers
+
+    private func doCheckIn(on date: Date = Date()) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { bumpScale = 1.08 }
+        store.checkIn(experimentId: live.id, on: date, note: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { bumpScale = 1.0 }
+    }
+
+    // ISO 8601 calendar always starts weeks on Monday
+    private var isoCalendar: Calendar { Calendar(identifier: .iso8601) }
+
+    private var startOfCurrentWeek: Date {
+        isoCalendar.date(from: isoCalendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: Date()))!
+    }
+
+    private func dateForDay(_ dayIndex: Int) -> Date {
+        isoCalendar.date(byAdding: .day, value: dayIndex, to: startOfCurrentWeek) ?? Date()
+    }
+
+    private var checkInsThisWeek: [CheckIn] {
+        let start = startOfCurrentWeek
+        let end = isoCalendar.date(byAdding: .day, value: 7, to: start)!
+        return live.checkIns.filter { $0.didComplete && $0.date >= start && $0.date < end }
+    }
+
+    private func isCheckedInDay(_ dayIndex: Int) -> Bool {
+        let day = dateForDay(dayIndex)
+        return live.checkIns.filter { $0.didComplete }.contains { isoCalendar.isDate($0.date, inSameDayAs: day) }
+    }
+
+    // 0 = Monday … 6 = Sunday (ISO weekday: Mon=2 … Sun=1)
+    private var currentDayIndex: Int {
+        let weekday = isoCalendar.component(.weekday, from: Date())
+        return (weekday - 2 + 7) % 7
+    }
+
+    private func dayLabel(_ index: Int) -> String {
+        ["M", "T", "W", "T", "F", "S", "S"][index]
     }
 
     private var closedBanner: some View {

@@ -32,13 +32,12 @@ struct ShelfItemView: View {
                         .foregroundStyle(graphite.opacity(0.75))
                 }
             }
-            .opacity(experiment.brightness)
             .rotationEffect(.degrees(experiment.tiltDegrees))
 
             if showLabel {
                 Text(experiment.name)
                     .font(.system(size: 11, weight: .regular, design: .rounded))
-                    .foregroundStyle(graphite.opacity(0.55 * experiment.brightness))
+                    .foregroundStyle(graphite.opacity(0.55))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: size * 1.3)
@@ -75,7 +74,6 @@ struct ShelfItemHeroView: View {
                     .foregroundStyle(graphite.opacity(0.75))
             }
         }
-        .opacity(experiment.brightness)
         .rotationEffect(.degrees(experiment.tiltDegrees * 0.5))
     }
 }

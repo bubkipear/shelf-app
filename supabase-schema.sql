@@ -26,7 +26,10 @@ CREATE TABLE public.experiments (
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   intention TEXT,
-  frequency TEXT, -- 'Daily', 'A few times a week', 'Weekly'
+  experiment_type TEXT DEFAULT 'habit', -- 'habit', 'target'
+  frequency TEXT,                       -- 'Daily', 'A few times a week', 'Weekly' (habits only)
+  times_per_week INTEGER,               -- specific count when frequency = 'A few times a week'
+  target_count INTEGER,                 -- number of milestones to hit (targets only)
   duration_days INTEGER,
   start_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   end_date TIMESTAMP WITH TIME ZONE,
@@ -39,6 +42,11 @@ CREATE TABLE public.experiments (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Migration for existing databases: add new columns if they don't exist
+-- ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS experiment_type TEXT DEFAULT 'habit';
+-- ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS times_per_week INTEGER;
+-- ALTER TABLE public.experiments ADD COLUMN IF NOT EXISTS target_count INTEGER;
 
 -- CHECK-INS TABLE
 CREATE TABLE public.check_ins (

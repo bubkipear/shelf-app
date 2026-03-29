@@ -1,19 +1,57 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Deadline options for target experiments
+
+private enum DeadlineOption: String, CaseIterable {
+    case thisWeek    = "This week"
+    case thisMonth   = "This month"
+    case threeMonths = "3 months"
+    case sixMonths   = "6 months"
+    case thisYear    = "This year"
+    case none        = "No deadline"
+
+    func endDate() -> Date? {
+        let cal = Calendar.current
+        let now = Date()
+        switch self {
+        case .thisWeek:    return cal.date(byAdding: .day,   value: 7,  to: now)
+        case .thisMonth:   return cal.date(byAdding: .month, value: 1,  to: now)
+        case .threeMonths: return cal.date(byAdding: .month, value: 3,  to: now)
+        case .sixMonths:   return cal.date(byAdding: .month, value: 6,  to: now)
+        case .thisYear:    return cal.date(byAdding: .year,  value: 1,  to: now)
+        case .none:        return nil
+        }
+    }
+}
+
+// MARK: - View
+
 struct NewExperimentView: View {
     @EnvironmentObject var store: SupabaseExperimentStore
     @Environment(\.dismiss) var dismiss
 
+    // Shared
     @State private var name: String = ""
     @State private var intention: String = ""
-    @State private var frequency: CheckInFrequency? = .daily
-    @State private var durationDays: Int? = 30
     @State private var isPublic: Bool = true
     @State private var selectedIcon: ExperimentIcon = .book
-    @State private var openEnded: Bool = false
     @State private var step: Int = 0
 
+    // Type
+    @State private var experimentType: ExperimentType = .habit
+
+    // Habit-specific
+    @State private var frequency: CheckInFrequency = .daily
+    @State private var timesPerWeek: Int = 3
+    @State private var durationDays: Int? = 30
+    @State private var openEnded: Bool = false
+
+    // Target-specific
+    @State private var targetCount: Int = 1
+    @State private var deadlineOption: DeadlineOption = .none
+
+    // Photo
     @State private var selectedPhoto: PhotosPickerItem? = nil
     @State private var processedImage: UIImage? = nil
     @State private var isProcessingPhoto = false
@@ -34,7 +72,7 @@ struct NewExperimentView: View {
                     .padding(.top, 12).padding(.bottom, 28)
 
                 HStack(spacing: 6) {
-                    ForEach(0..<2) { i in
+                    ForEach(0..<3) { i in
                         Capsule()
                             .fill(i <= step ? graphite : graphite.opacity(0.15))
                             .frame(width: i == step ? 20 : 6, height: 6)
@@ -48,8 +86,13 @@ struct NewExperimentView: View {
                         insertion: .opacity.combined(with: .move(edge: .trailing)),
                         removal: .opacity.combined(with: .move(edge: .leading))
                     ))
+                } else if step == 1 {
+                    stepTypeSelect.transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .trailing)),
+                        removal: .opacity.combined(with: .move(edge: .leading))
+                    ))
                 } else {
-                    stepTwo.transition(.asymmetric(
+                    stepDetails.transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .trailing)),
                         removal: .opacity.combined(with: .move(edge: .leading))
                     ))
@@ -193,12 +236,94 @@ struct NewExperimentView: View {
         }
     }
 
-    // MARK: - Step 2: Details
+    // MARK: - Step 2: Type selection
 
-    private var stepTwo: some View {
+    private var stepTypeSelect: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+
+                Text("What kind of experiment?")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .foregroundStyle(graphite)
+                    .padding(.horizontal, 24)
+
+                typeCard(
+                    type: .habit,
+                    title: "Try a habit",
+                    subtitle: "Do something regularly over time",
+                    example: "Wake up at 5am every day for a week"
+                )
+
+                typeCard(
+                    type: .target,
+                    title: "Set a target",
+                    subtitle: "Complete something a set number of times",
+                    example: "Schedule 3 coffee chats with designers"
+                )
+
+                HStack(spacing: 10) {
+                    Button {
+                        withAnimation(.spring(response: 0.4)) { step = 0 }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(graphite.opacity(0.6))
+                            .frame(width: 50, height: 50)
+                            .background(graphite.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }.buttonStyle(.plain)
+
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) { step = 2 }
+                    } label: {
+                        Text("Continue")
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .foregroundStyle(cream)
+                            .frame(maxWidth: .infinity).padding(.vertical, 16)
+                            .background(graphite)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+            }
+            .padding(.bottom, 40)
+        }
+    }
+
+    private func typeCard(type: ExperimentType, title: String, subtitle: String, example: String) -> some View {
+        let isSelected = experimentType == type
+        return Button {
+            withAnimation(.spring(response: 0.3)) { experimentType = type }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .foregroundStyle(isSelected ? cream : graphite)
+                Text(subtitle)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(isSelected ? cream.opacity(0.75) : graphite.opacity(0.5))
+                Text("e.g. \(example)")
+                    .font(.system(size: 12, design: .rounded)).italic()
+                    .foregroundStyle(isSelected ? cream.opacity(0.5) : graphite.opacity(0.28))
+                    .padding(.top, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(isSelected ? graphite : graphite.opacity(0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 24)
+    }
+
+    // MARK: - Step 3: Details (branches on type)
+
+    private var stepDetails: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 28) {
 
+                // Intention
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Text("Set an intention")
@@ -225,54 +350,14 @@ struct NewExperimentView: View {
                     Rectangle().fill(graphite.opacity(0.15)).frame(height: 1)
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("How often?")
-                        .font(.system(size: 14, weight: .medium, design: .rounded))
-                        .foregroundStyle(graphite.opacity(0.5))
-                    HStack(spacing: 8) {
-                        ForEach(CheckInFrequency.allCases, id: \.self) { f in
-                            let sel = frequency == f
-                            Button { withAnimation(.spring(response: 0.3)) { frequency = f } } label: {
-                                Text(f.rawValue)
-                                    .font(.system(size: 12, weight: sel ? .semibold : .regular, design: .rounded))
-                                    .foregroundStyle(sel ? cream : graphite.opacity(0.55))
-                                    .padding(.horizontal, 12).padding(.vertical, 9)
-                                    .background(sel ? graphite : graphite.opacity(0.07))
-                                    .clipShape(Capsule())
-                            }.buttonStyle(.plain)
-                        }
-                    }
+                // Type-specific fields
+                if experimentType == .habit {
+                    habitFields
+                } else {
+                    targetFields
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("Duration")
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(graphite.opacity(0.5))
-                        Spacer()
-                        Toggle("", isOn: $openEnded)
-                            .toggleStyle(SwitchToggleStyle(tint: graphite)).labelsHidden()
-                        Text("Open-ended")
-                            .font(.system(size: 12, design: .rounded))
-                            .foregroundStyle(graphite.opacity(0.4))
-                    }
-                    if !openEnded {
-                        HStack(spacing: 8) {
-                            ForEach([7, 14, 21, 30], id: \.self) { d in
-                                let sel = durationDays == d
-                                Button { withAnimation(.spring(response: 0.3)) { durationDays = d } } label: {
-                                    Text("\(d)d")
-                                        .font(.system(size: 13, weight: sel ? .semibold : .regular, design: .rounded))
-                                        .foregroundStyle(sel ? cream : graphite.opacity(0.55))
-                                        .frame(maxWidth: .infinity).padding(.vertical, 10)
-                                        .background(sel ? graphite : graphite.opacity(0.07))
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }.buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-
+                // Public toggle
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Make it public")
@@ -289,7 +374,7 @@ struct NewExperimentView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
 
                 HStack(spacing: 10) {
-                    Button { withAnimation(.spring(response: 0.4)) { step = 0 } } label: {
+                    Button { withAnimation(.spring(response: 0.4)) { step = 1 } } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(graphite.opacity(0.6))
@@ -307,6 +392,117 @@ struct NewExperimentView: View {
                 }
             }
             .padding(.horizontal, 24).padding(.bottom, 40)
+        }
+    }
+
+    private var habitFields: some View {
+        VStack(alignment: .leading, spacing: 20) {
+
+            // How often
+            VStack(alignment: .leading, spacing: 12) {
+                Text("How often?")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(graphite.opacity(0.5))
+                HStack(spacing: 8) {
+                    ForEach(CheckInFrequency.allCases, id: \.self) { f in
+                        let sel = frequency == f
+                        Button { withAnimation(.spring(response: 0.3)) { frequency = f } } label: {
+                            Text(f.rawValue)
+                                .font(.system(size: 12, weight: sel ? .semibold : .regular, design: .rounded))
+                                .foregroundStyle(sel ? cream : graphite.opacity(0.55))
+                                .padding(.horizontal, 12).padding(.vertical, 9)
+                                .background(sel ? graphite : graphite.opacity(0.07))
+                                .clipShape(Capsule())
+                        }.buttonStyle(.plain)
+                    }
+                }
+                // Stepper when "A few times a week" is selected
+                if frequency == .severalTimesWeek {
+                    HStack {
+                        Text("\(timesPerWeek) times a week")
+                            .font(.system(size: 14, design: .rounded))
+                            .foregroundStyle(graphite.opacity(0.6))
+                        Spacer()
+                        Stepper("", value: $timesPerWeek, in: 2...6)
+                            .labelsHidden()
+                    }
+                    .padding(.top, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+
+            // Duration
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("For how long?")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundStyle(graphite.opacity(0.5))
+                    Spacer()
+                    Toggle("", isOn: $openEnded)
+                        .toggleStyle(SwitchToggleStyle(tint: graphite)).labelsHidden()
+                    Text("Open-ended")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(graphite.opacity(0.4))
+                }
+                if !openEnded {
+                    HStack(spacing: 8) {
+                        ForEach([7, 14, 21, 30], id: \.self) { d in
+                            let sel = durationDays == d
+                            Button { withAnimation(.spring(response: 0.3)) { durationDays = d } } label: {
+                                Text("\(d)d")
+                                    .font(.system(size: 13, weight: sel ? .semibold : .regular, design: .rounded))
+                                    .foregroundStyle(sel ? cream : graphite.opacity(0.55))
+                                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                                    .background(sel ? graphite : graphite.opacity(0.07))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var targetFields: some View {
+        VStack(alignment: .leading, spacing: 20) {
+
+            // How many times
+            VStack(alignment: .leading, spacing: 12) {
+                Text("How many times?")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(graphite.opacity(0.5))
+                HStack {
+                    Text("\(targetCount) \(targetCount == 1 ? "time" : "times")")
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(graphite)
+                    Spacer()
+                    Stepper("", value: $targetCount, in: 1...50)
+                        .labelsHidden()
+                }
+                .padding(14)
+                .background(graphite.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+
+            // By when
+            VStack(alignment: .leading, spacing: 12) {
+                Text("By when?")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(graphite.opacity(0.5))
+                LazyVGrid(columns: [.init(.flexible()), .init(.flexible()), .init(.flexible())], spacing: 8) {
+                    ForEach(DeadlineOption.allCases, id: \.self) { option in
+                        let sel = deadlineOption == option
+                        Button { withAnimation(.spring(response: 0.3)) { deadlineOption = option } } label: {
+                            Text(option.rawValue)
+                                .font(.system(size: 12, weight: sel ? .semibold : .regular, design: .rounded))
+                                .foregroundStyle(sel ? cream : graphite.opacity(0.55))
+                                .frame(maxWidth: .infinity).padding(.vertical, 10)
+                                .background(sel ? graphite : graphite.opacity(0.07))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }.buttonStyle(.plain)
+                    }
+                }
+            }
         }
     }
 
@@ -328,12 +524,18 @@ struct NewExperimentView: View {
         isProcessingPhoto = false
     }
 
+    // MARK: - Launch
+
     private func launch() {
         var experiment = Experiment(
             name: name,
             intention: intention.isEmpty ? nil : intention,
-            frequency: frequency,
-            durationDays: openEnded ? nil : durationDays,
+            experimentType: experimentType,
+            frequency: experimentType == .habit ? frequency : nil,
+            timesPerWeek: experimentType == .habit && frequency == .severalTimesWeek ? timesPerWeek : nil,
+            targetCount: experimentType == .target ? targetCount : nil,
+            durationDays: experimentType == .habit ? (openEnded ? nil : durationDays) : nil,
+            endDate: experimentType == .target ? deadlineOption.endDate() : nil,
             isPublic: isPublic,
             iconPreset: selectedIcon
         )

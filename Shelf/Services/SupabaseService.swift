@@ -180,7 +180,10 @@ class SupabaseService: ObservableObject {
         struct ExperimentUpdate: Encodable {
             let name: String
             let intention: String?
+            let experimentType: String
             let frequency: String?
+            let timesPerWeek: Int?
+            let targetCount: Int?
             let durationDays: Int?
             let status: String
             let isPublic: Bool
@@ -190,6 +193,9 @@ class SupabaseService: ObservableObject {
             let updatedAt: String
             enum CodingKeys: String, CodingKey {
                 case name, intention, frequency, status
+                case experimentType = "experiment_type"
+                case timesPerWeek = "times_per_week"
+                case targetCount = "target_count"
                 case durationDays = "duration_days"
                 case isPublic = "is_public"
                 case iconPreset = "icon_preset"
@@ -203,7 +209,10 @@ class SupabaseService: ObservableObject {
             .update(ExperimentUpdate(
                 name: experiment.name,
                 intention: experiment.intention,
+                experimentType: experiment.experimentType,
                 frequency: experiment.frequency,
+                timesPerWeek: experiment.timesPerWeek,
+                targetCount: experiment.targetCount,
                 durationDays: experiment.durationDays,
                 status: experiment.status,
                 isPublic: experiment.isPublic,
@@ -360,7 +369,10 @@ struct ExperimentData: Codable, Identifiable {
     var userId: UUID?
     var name: String
     var intention: String?
+    var experimentType: String
     var frequency: String?
+    var timesPerWeek: Int?
+    var targetCount: Int?
     var durationDays: Int?
     let startDate: Date
     var endDate: Date?
@@ -372,17 +384,20 @@ struct ExperimentData: Codable, Identifiable {
     var closingReflection: String?
     let createdAt: Date?
     var updatedAt: Date?
-    
+
     // Relations
     var checkIns: [CheckInData]?
     var author: UserProfile?
-    
+
     enum CodingKeys: String, CodingKey {
         case id
         case userId = "user_id"
         case name
         case intention
+        case experimentType = "experiment_type"
         case frequency
+        case timesPerWeek = "times_per_week"
+        case targetCount = "target_count"
         case durationDays = "duration_days"
         case startDate = "start_date"
         case endDate = "end_date"
@@ -397,13 +412,16 @@ struct ExperimentData: Codable, Identifiable {
         case checkIns = "check_ins"
         case author = "users"
     }
-    
+
     init(from experiment: Experiment) {
         self.id = experiment.id
         self.userId = nil // Will be set by service
         self.name = experiment.name
         self.intention = experiment.intention
+        self.experimentType = experiment.experimentType.rawValue
         self.frequency = experiment.frequency?.rawValue
+        self.timesPerWeek = experiment.timesPerWeek
+        self.targetCount = experiment.targetCount
         self.durationDays = experiment.durationDays
         self.startDate = experiment.startDate
         self.endDate = experiment.endDate
@@ -417,6 +435,36 @@ struct ExperimentData: Codable, Identifiable {
         self.updatedAt = nil
         self.checkIns = experiment.checkIns.map(CheckInData.init)
         self.author = nil
+    }
+
+}
+
+// MARK: - Backward-compatible decoder (extension preserves synthesised memberwise init)
+
+extension ExperimentData {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id               = try c.decode(UUID.self,            forKey: .id)
+        userId           = try c.decodeIfPresent(UUID.self,   forKey: .userId)
+        name             = try c.decode(String.self,          forKey: .name)
+        intention        = try c.decodeIfPresent(String.self, forKey: .intention)
+        experimentType   = try c.decodeIfPresent(String.self, forKey: .experimentType) ?? "habit"
+        frequency        = try c.decodeIfPresent(String.self, forKey: .frequency)
+        timesPerWeek     = try c.decodeIfPresent(Int.self,    forKey: .timesPerWeek)
+        targetCount      = try c.decodeIfPresent(Int.self,    forKey: .targetCount)
+        durationDays     = try c.decodeIfPresent(Int.self,    forKey: .durationDays)
+        startDate        = try c.decode(Date.self,            forKey: .startDate)
+        endDate          = try c.decodeIfPresent(Date.self,   forKey: .endDate)
+        status           = try c.decode(String.self,          forKey: .status)
+        isPublic         = try c.decodeIfPresent(Bool.self,   forKey: .isPublic)         ?? true
+        iconPreset       = try c.decodeIfPresent(String.self, forKey: .iconPreset)       ?? "book.closed"
+        hasCustomImage   = try c.decodeIfPresent(Bool.self,   forKey: .hasCustomImage)   ?? false
+        customImageUrl   = try c.decodeIfPresent(String.self, forKey: .customImageUrl)
+        closingReflection = try c.decodeIfPresent(String.self, forKey: .closingReflection)
+        createdAt        = try c.decodeIfPresent(Date.self,   forKey: .createdAt)
+        updatedAt        = try c.decodeIfPresent(Date.self,   forKey: .updatedAt)
+        checkIns         = try c.decodeIfPresent([CheckInData].self, forKey: .checkIns) ?? []
+        author           = try c.decodeIfPresent(UserProfile.self,   forKey: .author)
     }
 }
 

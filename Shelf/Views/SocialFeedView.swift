@@ -148,7 +148,6 @@ struct CommunityExperimentCard: View {
                         .font(.system(size: 24, weight: .thin))
                         .foregroundStyle(graphite.opacity(0.6))
                 }
-                .opacity(experiment.brightness)
                 .rotationEffect(.degrees(experiment.tiltDegrees * 0.3))
                 
                 // Experiment details

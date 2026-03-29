@@ -70,19 +70,30 @@ class SupabaseExperimentStore: ObservableObject {
         }
     }
     
-    func checkIn(experimentId: UUID, note: String?) {
-        localStore.checkIn(experimentId: experimentId, note: note)
+    func checkIn(experimentId: UUID, on date: Date = Date(), note: String?) {
+        localStore.checkIn(experimentId: experimentId, on: date, note: note)
         myExperiments = localStore.experiments
 
         if supabaseService.isAuthenticated {
             Task {
                 do {
                     let _ = try await supabaseService.addCheckIn(experimentId: experimentId, note: note)
+                    // If a target experiment just auto-completed, sync the status change
+                    if let exp = myExperiments.first(where: { $0.id == experimentId }),
+                       exp.status == .completed,
+                       exp.experimentType == .target {
+                        let _ = try await supabaseService.updateExperiment(ExperimentData(from: exp))
+                    }
                 } catch {
                     handleError(error)
                 }
             }
         }
+    }
+
+    func removeCheckIn(experimentId: UUID, on date: Date) {
+        localStore.removeCheckIn(experimentId: experimentId, on: date)
+        myExperiments = localStore.experiments
     }
 
     func addObservation(experimentId: UUID, note: String) {
@@ -269,7 +280,10 @@ class SupabaseExperimentStore: ObservableObject {
             id: data.id,
             name: data.name,
             intention: data.intention,
+            experimentType: ExperimentType(rawValue: data.experimentType) ?? .habit,
             frequency: CheckInFrequency(rawValue: data.frequency ?? "Daily"),
+            timesPerWeek: data.timesPerWeek,
+            targetCount: data.targetCount,
             durationDays: data.durationDays,
             startDate: data.startDate,
             endDate: data.endDate,
@@ -356,10 +370,29 @@ class LocalExperimentStore {
         save()
     }
     
-    func checkIn(experimentId: UUID, note: String?) {
+    func checkIn(experimentId: UUID, on date: Date = Date(), note: String?) {
         guard let i = experiments.firstIndex(where: { $0.id == experimentId }) else { return }
-        let entry = CheckIn(date: Date(), didComplete: true, note: note)
+        let cal = Calendar(identifier: .iso8601)
+        // Prevent duplicate check-ins on the same calendar day
+        guard !experiments[i].checkIns.contains(where: { $0.didComplete && cal.isDate($0.date, inSameDayAs: date) }) else { return }
+        let entry = CheckIn(date: date, didComplete: true, note: note)
         experiments[i].checkIns.append(entry)
+        // Auto-complete target experiments when all milestones are reached
+        if experiments[i].experimentType == .target,
+           let target = experiments[i].targetCount,
+           experiments[i].checkIns.filter({ $0.didComplete }).count >= target {
+            experiments[i].status = .completed
+            if experiments[i].endDate == nil {
+                experiments[i].endDate = Date()
+            }
+        }
+        save()
+    }
+
+    func removeCheckIn(experimentId: UUID, on date: Date) {
+        guard let i = experiments.firstIndex(where: { $0.id == experimentId }) else { return }
+        let cal = Calendar(identifier: .iso8601)
+        experiments[i].checkIns.removeAll { $0.didComplete && cal.isDate($0.date, inSameDayAs: date) }
         save()
     }
     

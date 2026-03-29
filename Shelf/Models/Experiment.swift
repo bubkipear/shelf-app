@@ -3,6 +3,11 @@ import SwiftUI
 
 // MARK: - Enums
 
+enum ExperimentType: String, Codable {
+    case habit
+    case target
+}
+
 enum CheckInFrequency: String, Codable, CaseIterable {
     case daily = "Daily"
     case severalTimesWeek = "A few times a week"
@@ -10,9 +15,9 @@ enum CheckInFrequency: String, Codable, CaseIterable {
 }
 
 enum ExperimentState {
-    case tended
-    case neglected
-    case adrift
+    case onTrack
+    case missed
+    case offTrack
     case abandoned
     case completed
 }
@@ -82,7 +87,10 @@ struct Experiment: Identifiable, Codable {
     var id: UUID = UUID()
     var name: String
     var intention: String?
+    var experimentType: ExperimentType = .habit
     var frequency: CheckInFrequency?
+    var timesPerWeek: Int?              // used when frequency == .severalTimesWeek
+    var targetCount: Int?               // used when experimentType == .target
     var durationDays: Int?
     var startDate: Date = Date()
     var endDate: Date?
@@ -99,31 +107,42 @@ struct Experiment: Identifiable, Codable {
         guard status == .active else {
             return status == .abandoned ? .abandoned : .completed
         }
-        guard let daysSinceLast = daysSinceLastCheckIn else { return .adrift }
-        switch daysSinceLast {
-        case 0...2:  return .tended
-        case 3...7:  return .neglected
-        default:     return .adrift
+        // Off track: past end date / deadline without completing
+        if let end = endDate, Date() > end {
+            return .offTrack
+        }
+        // Target experiments are on track as long as they're within deadline (or have no deadline)
+        if experimentType == .target {
+            return .onTrack
+        }
+        // Habit: assess recency of check-ins against frequency-based threshold
+        let threshold = missedThreshold
+        if let days = daysSinceLastCheckIn {
+            return days > threshold ? .missed : .onTrack
+        } else {
+            // No check-ins yet — missed if the experiment has been running long enough
+            return daysSinceStart > threshold ? .missed : .onTrack
         }
     }
 
-    var brightness: Double {
-        switch experimentState {
-        case .tended:    return 1.0
-        case .neglected: return 0.6
-        case .adrift:    return 0.3
-        case .abandoned: return 0.15
-        case .completed: return 0.8
+    // How many days without a check-in before a habit is considered "missed"
+    private var missedThreshold: Int {
+        switch frequency {
+        case .daily:            return 1
+        case .severalTimesWeek: return 2
+        case .weekly:           return 7
+        case .none:             return 2
         }
     }
 
     var daysSinceLastCheckIn: Int? {
-        guard let last = checkIns.sorted(by: { $0.date > $1.date }).first else { return nil }
+        let completions = checkIns.filter { $0.didComplete }
+        guard let last = completions.sorted(by: { $0.date > $1.date }).first else { return nil }
         return Calendar.current.dateComponents([.day], from: last.date, to: Date()).day
     }
 
     var currentStreakDays: Int {
-        let sorted = checkIns.sorted(by: { $0.date > $1.date })
+        let sorted = checkIns.filter { $0.didComplete }.sorted(by: { $0.date > $1.date })
         var streak = 0
         var reference = Date()
         for checkIn in sorted {
@@ -143,5 +162,29 @@ struct Experiment: Identifiable, Codable {
     var tiltDegrees: Double {
         let hash = abs(id.hashValue % 1000)
         return (Double(hash) / 1000.0 - 0.5) * 12
+    }
+}
+
+// MARK: - Backward-compatible decoder (extension preserves synthesised memberwise init)
+
+extension Experiment {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id               = try c.decodeIfPresent(UUID.self,             forKey: .id)               ?? UUID()
+        name             = try c.decode(String.self,                    forKey: .name)
+        intention        = try c.decodeIfPresent(String.self,           forKey: .intention)
+        experimentType   = try c.decodeIfPresent(ExperimentType.self,   forKey: .experimentType)   ?? .habit
+        frequency        = try c.decodeIfPresent(CheckInFrequency.self, forKey: .frequency)
+        timesPerWeek     = try c.decodeIfPresent(Int.self,              forKey: .timesPerWeek)
+        targetCount      = try c.decodeIfPresent(Int.self,              forKey: .targetCount)
+        durationDays     = try c.decodeIfPresent(Int.self,              forKey: .durationDays)
+        startDate        = try c.decodeIfPresent(Date.self,             forKey: .startDate)        ?? Date()
+        endDate          = try c.decodeIfPresent(Date.self,             forKey: .endDate)
+        status           = try c.decodeIfPresent(ExperimentStatus.self, forKey: .status)           ?? .active
+        isPublic         = try c.decodeIfPresent(Bool.self,             forKey: .isPublic)         ?? true
+        iconPreset       = try c.decodeIfPresent(ExperimentIcon.self,   forKey: .iconPreset)       ?? .book
+        hasCustomImage   = try c.decodeIfPresent(Bool.self,             forKey: .hasCustomImage)   ?? false
+        checkIns         = try c.decodeIfPresent([CheckIn].self,        forKey: .checkIns)         ?? []
+        closingReflection = try c.decodeIfPresent(String.self,          forKey: .closingReflection)
     }
 }
