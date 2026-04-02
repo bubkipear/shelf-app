@@ -14,14 +14,18 @@ struct ShelfItemView: View {
         VStack(spacing: 6) {
             ZStack {
                 if let img = customImage {
-                    // Custom photo — background removed, sticker style
                     Image(uiImage: img)
                         .resizable()
                         .scaledToFit()
                         .frame(width: size, height: size)
                         .shadow(color: .black.opacity(0.18), radius: 4, x: 1, y: 3)
+                } else if let stickerName = experiment.iconPreset.stickerImageName {
+                    Image(stickerName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: size, height: size)
+                        .shadow(color: .black.opacity(0.18), radius: 4, x: 1, y: 3)
                 } else {
-                    // Preset icon — clean card
                     RoundedRectangle(cornerRadius: size * 0.12)
                         .fill(Color(red: 0.97, green: 0.95, blue: 0.91))
                         .frame(width: size, height: size)
@@ -59,6 +63,12 @@ struct ShelfItemHeroView: View {
         ZStack {
             if let img = customImage {
                 Image(uiImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: size, height: size)
+                    .shadow(color: .black.opacity(0.2), radius: 8, x: 2, y: 6)
+            } else if let stickerName = experiment.iconPreset.stickerImageName {
+                Image(stickerName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: size, height: size)
